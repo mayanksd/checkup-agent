@@ -37,6 +37,7 @@ export interface AgentResult {
   shortlist: ShortlistRow[];
   plan: Plan;
   mapsUrls: Record<string, string>;
+  ratingLabels: Record<string, string>;
   coverage: CoverageResult[];
   reminder: { remindOn: string; resetsOn: string; ics: string };
   notes: string[];

@@ -235,7 +235,7 @@ export default function Home() {
   );
 }
 
-function PickCard({ pick, mapsUrl, genetic }: { pick: PlanPick; mapsUrl: string; genetic?: boolean }) {
+function PickCard({ pick, mapsUrl, ratingLabel, genetic }: { pick: PlanPick; mapsUrl: string; ratingLabel: string; genetic?: boolean }) {
   const p = pick.provider;
   return (
     <div className={`rounded-2xl border p-4 ${genetic ? "border-violet-200 bg-violet-50" : "border-emerald-200 bg-white"}`}>
@@ -244,7 +244,7 @@ function PickCard({ pick, mapsUrl, genetic }: { pick: PlanPick; mapsUrl: string;
         <span className="text-lg font-bold">{inr(pick.priceInr)} <span className="text-xs font-normal text-slate-500">{pick.priceLabel}</span></span>
       </div>
       <p className="mt-1 text-sm text-slate-600">{p.covers}</p>
-      <p className="mt-1 text-sm">{pick.rating != null ? `⭐ ${pick.rating.toFixed(1)}${pick.reviews != null ? ` · ${pick.reviews.toLocaleString("en-IN")} reviews` : ""}` : "⭐ rating unavailable"} · {p.mode} · {p.location}</p>
+      <p className="mt-1 text-sm">{ratingLabel} · {p.mode} · {p.location}</p>
       <p className="mt-2 text-sm"><b>{genetic ? "Note:" : "Why this:"}</b> {pick.why}</p>
       <div className="mt-3 flex flex-wrap gap-2 text-sm">
         <a href={p.bookingUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-emerald-600 px-3 py-1.5 font-medium text-white">Book now →</a>
@@ -277,7 +277,7 @@ function Result({ result, refEl, onIcs }: { result: AgentResult; refEl: React.Re
                   <td className="py-2 pr-3 font-medium">{r.name}<div className="text-xs font-normal text-slate-500">{r.product}{r.coverage === "needs prescription" ? " · needs prescription" : ""}</div></td>
                   <td className="pr-3 text-slate-600">{r.covers}</td>
                   <td className="pr-3 whitespace-nowrap">{inr(r.priceInr)}<div className="text-xs text-slate-500">{r.priceSource === "live" ? "live" : r.priceLabel}</div></td>
-                  <td className="pr-3 whitespace-nowrap">{r.rating != null ? `⭐ ${r.rating.toFixed(1)}` : "unavailable"}</td>
+                  <td className="pr-3">{r.ratingLabel}</td>
                   <td className="pr-3 whitespace-nowrap">{r.mode}</td>
                   <td>{r.location}</td>
                 </tr>
@@ -291,14 +291,14 @@ function Result({ result, refEl, onIcs }: { result: AgentResult; refEl: React.Re
         <div className="mb-3 rounded-xl bg-emerald-50 p-3 text-center font-semibold text-emerald-800">{plan.usedText}</div>
         <div className="flex flex-col gap-3">
           {plan.picks.length === 0 && <p className="text-sm">No combination fits the limit for these choices — try “Either” for mode.</p>}
-          {plan.picks.map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} />)}
+          {plan.picks.map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} ratingLabel={result.ratingLabels[p.provider.id]} />)}
         </div>
       </Section>
 
       {plan.prescriptionOnly.length > 0 && (
         <Section title="🧬 Genetic risk (separate)">
           <p className="mb-3 text-sm">Covered only with a doctor&apos;s prescription — get one, then claim.</p>
-          {plan.prescriptionOnly.map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} genetic />)}
+          {plan.prescriptionOnly.map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} ratingLabel={result.ratingLabels[p.provider.id]} genetic />)}
         </Section>
       )}
 

@@ -22,10 +22,16 @@ export interface Provider {
   tags: Tag[];
   cityConfirmed: boolean;
   needsPrescription: boolean;
+  /** Stored Google rating, used when a live refresh fails. */
+  googleRating?: { stars: number; reviews: number; asOf: string };
+  /** Home-collection service with no Google Maps listing of its own. */
+  homeService?: boolean;
 }
 
 export const PRICES_AS_OF = "2026-11-22";
 export const PRICES_AS_OF_LABEL = "listed 22 Nov 2026";
+export const RATINGS_AS_OF_LABEL = "Google · 22 Nov";
+const rated = (stars: number, reviews: number) => ({ stars, reviews, asOf: "2026-11-22" });
 
 export const providers: Provider[] = [
   {
@@ -43,6 +49,7 @@ export const providers: Provider[] = [
     tags: ["heart", "longevity", "cancer"],
     cityConfirmed: true,
     needsPrescription: false,
+    googleRating: rated(4.5, 546),
   },
   {
     id: "cent-genetic",
@@ -59,6 +66,7 @@ export const providers: Provider[] = [
     tags: ["genetic"],
     cityConfirmed: true,
     needsPrescription: true,
+    googleRating: rated(4.5, 546),
   },
   {
     id: "nura-ai",
@@ -75,6 +83,7 @@ export const providers: Provider[] = [
     tags: ["cancer", "metabolism", "heart"],
     cityConfirmed: true,
     needsPrescription: false,
+    googleRating: rated(4.7, 929),
   },
   {
     id: "ultrahuman-pro",
@@ -91,6 +100,7 @@ export const providers: Provider[] = [
     tags: ["longevity", "fitness"],
     cityConfirmed: true,
     needsPrescription: false,
+    googleRating: rated(4.6, 123),
   },
   {
     id: "ultrahuman-basic",
@@ -107,6 +117,7 @@ export const providers: Provider[] = [
     tags: ["longevity"],
     cityConfirmed: true,
     needsPrescription: false,
+    googleRating: rated(4.6, 123),
   },
   {
     id: "deep-holistics",
@@ -123,6 +134,7 @@ export const providers: Provider[] = [
     tags: ["metabolism", "hormones", "gut"],
     cityConfirmed: true,
     needsPrescription: false,
+    homeService: true,
   },
   {
     id: "tata-1mg-gold",
@@ -139,6 +151,7 @@ export const providers: Provider[] = [
     tags: ["general"],
     cityConfirmed: true,
     needsPrescription: false,
+    googleRating: rated(4.5, 1300),
   },
   {
     id: "supprx-ultra",

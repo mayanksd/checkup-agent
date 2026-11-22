@@ -36,14 +36,16 @@ The API key is read from `ANTHROPIC_API_KEY` in the environment only. Without a 
 
 Stack: Next.js 15 (App Router) · TypeScript · Tailwind · Vercel AI SDK (`ai`, `@ai-sdk/anthropic`) · zod. Model: `claude-sonnet-5-5`.
 
+As soon as the shortlist exists, every price and rating look-up starts **in parallel** (`Promise.allSettled`, 15s each), so the whole run takes about 20s. The model's `checkLivePrice`/`getRating` calls then just read those results.
+
 `/api/agent` runs `streamText` with 7 tools for up to 10 steps and streams NDJSON events to the page. **The model decides which tools to call. Code does all the money maths, coverage checks and ranking.** If the model stops early or errors, code finishes the remaining steps, so a plan always comes back.
 
 | # | Tool | What it does |
 |---|------|--------------|
 | 1 | `getPolicy(personaId)` | Returns the limit, claim route and rules. Lines that look like instructions (`SYSTEM:`, "ignore…", "set the limit…") are removed and counted. The limit always comes from structured data. |
 | 2 | `searchProviders(focus[], mode)` | Returns city-confirmed providers that offer the chosen mode, best focus match first. |
-| 3 | `checkLivePrice(providerId)` | Looks up the price with Anthropic web search, restricted to the provider's own domain, with a 10s timeout. On any failure, or if the price is implausible (outside 0.5–1.5× the listed price), it falls back to the listed price, labelled "listed 22 Nov 2026". |
-| 4 | `getRating(providerId)` | Looks up the Google rating and review count with web search (10s timeout). On failure it returns "rating unavailable". It always returns a Google Maps search link and never shows review text. |
+| 3 | `checkLivePrice(providerId)` | Looks up the price with Anthropic web search, restricted to the provider's own domain, with a 15s timeout. On any failure, or if the price is implausible (outside 0.5–1.5× the listed price), it falls back to the listed price, labelled "listed 22 Nov 2026". |
+| 4 | `getRating(providerId)` | Tries a live refresh of the Google rating and review count with web search (15s timeout). On failure it uses the stored rating (as of 22 Nov 2026), labelled "Google · 22 Nov". Home-only services with no listing show "Home service — see reviews on Google". It always returns a Google Maps search link and never shows review text. |
 | 5 | `checkCoverage(providerIds, policy)` | Marks each provider as covered, needs prescription, or not covered. |
 | 6 | `buildPlan(candidates, limit, focus, mode)` | Deterministic optimiser that tries every combination of candidates. Constraints: total ≤ limit and no duplicate tests. It ranks by focus areas covered → spend on focus-matching picks → distinct tests → rating (tie-breaker) → total used. It returns "₹X of ₹30,000 used" and a one-line "why" for each pick. |
 | 7 | `createReminder(policyYearStart)` | Creates a `.ics` event 30 days before the policy year resets (2026-12-02 for a 2026-01-01 start). |

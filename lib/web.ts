@@ -2,10 +2,10 @@
 import { generateText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
-import { PRICES_AS_OF_LABEL, type Provider } from "../data/providers.ts";
+import { PRICES_AS_OF_LABEL, RATINGS_AS_OF_LABEL, type Provider } from "../data/providers.ts";
 
 export const MODEL_ID = "claude-sonnet-5-5";
-export const WEB_TIMEOUT_MS = 10_000;
+export const WEB_TIMEOUT_MS = 15_000;
 
 export const hasApiKey = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
@@ -50,16 +50,32 @@ export async function checkLivePrice(p: Provider, opts: { simulateFailure: boole
     if (live < p.priceInr * 0.5 || live > p.priceInr * 1.5) return listed("Live price looked unreliable");
     return { priceInr: live, source: "live", label: "live price" };
   } catch (e) {
-    return listed(e instanceof Error && e.name === "TimeoutError" ? "Timed out after 10s" : "Live price unavailable");
+    return listed(e instanceof Error && e.name === "TimeoutError" ? "Timed out after 15s" : "Live price unavailable");
   }
 }
 
-export interface Rating { rating: number | null; reviews: number | null; mapsUrl: string; label: string; note?: string }
+export interface Rating {
+  rating: number | null;
+  reviews: number | null;
+  source: "live" | "stored" | "none";
+  mapsUrl: string;
+  label: string;
+  note?: string;
+}
+
+export const ratingLabel = (stars: number, reviews: number | null) =>
+  `⭐ ${stars.toFixed(1)}${reviews != null ? ` (${reviews.toLocaleString("en-IN")} Google reviews)` : ""}`;
+
+/** Fallback when the live refresh fails: stored rating, else a pointer to Google. */
+export function storedRating(p: Provider, note?: string): Rating {
+  const mapsUrl = mapsLink(p);
+  const g = p.googleRating;
+  if (g) return { rating: g.stars, reviews: g.reviews, source: "stored", mapsUrl, label: `${ratingLabel(g.stars, g.reviews)} · ${RATINGS_AS_OF_LABEL}`, note };
+  return { rating: null, reviews: null, source: "none", mapsUrl, label: p.homeService ? "Home service — see reviews on Google" : "rating unavailable", note };
+}
 
 export async function getRating(p: Provider, opts: { simulateFailure: boolean }): Promise<Rating> {
-  const mapsUrl = mapsLink(p);
-  const none = (note: string): Rating => ({ rating: null, reviews: null, mapsUrl, label: "rating unavailable", note });
-  if (opts.simulateFailure) return none("Simulated tool failure");
+  if (opts.simulateFailure) return storedRating(p, "Simulated tool failure");
   try {
     const raw = await askWeb(
       `What is the Google rating (out of 5) and Google review count for ${p.name}, ${p.location}? Do not quote any review text. Reply exactly {"rating": <number or null>, "reviews": <integer or null>}.`,
@@ -68,11 +84,13 @@ export async function getRating(p: Provider, opts: { simulateFailure: boolean })
       rating: z.number().min(1).max(5).nullable(),
       reviews: z.number().int().nonnegative().nullable().optional(),
     }).safeParse(raw);
-    if (!parsed.success || parsed.data.rating == null) return none("Rating not found");
+    if (!parsed.success || parsed.data.rating == null) return storedRating(p, "Live rating not found");
     const rating = Math.round(parsed.data.rating * 10) / 10;
+    // A web page can't swing a known rating wildly.
+    if (p.googleRating && Math.abs(rating - p.googleRating.stars) > 1) return storedRating(p, "Live rating looked unreliable");
     const reviews = parsed.data.reviews ?? null;
-    return { rating, reviews, mapsUrl, label: `⭐ ${rating.toFixed(1)}${reviews != null ? ` (${reviews.toLocaleString("en-IN")})` : ""}` };
+    return { rating, reviews, source: "live", mapsUrl: mapsLink(p), label: ratingLabel(rating, reviews) };
   } catch (e) {
-    return none(e instanceof Error && e.name === "TimeoutError" ? "Timed out after 10s" : "Rating unavailable");
+    return storedRating(p, e instanceof Error && e.name === "TimeoutError" ? "Timed out after 15s" : "Live rating unavailable");
   }
 }

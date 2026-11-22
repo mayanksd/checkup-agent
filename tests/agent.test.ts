@@ -48,11 +48,26 @@ test("tool failure still yields a plan with listed prices and no ratings", async
   });
   assert.ok(r.plan.picks.length > 0);
   assert.ok(r.plan.picks.every((p) => p.priceSource === "listed" && p.priceLabel === "listed 22 Nov 2026"));
-  assert.ok(r.shortlist.every((s) => s.ratingLabel === "unavailable"));
+  // stored ratings are used — never "rating unavailable" when one exists
+  for (const row of r.shortlist) {
+    if (row.providerId === "deep-holistics") assert.equal(row.ratingLabel, "Home service — see reviews on Google");
+    else assert.match(row.ratingLabel, /^⭐ \d\.\d \([\d,]+ Google reviews\) · Google · 22 Nov$/);
+  }
   assert.ok(steps.includes("checkLivePrice:warn") && steps.includes("getRating:warn"));
   assert.ok(steps.includes("buildPlan:ok"));
   assert.ok(r.notes.some((n) => /Simulated tool failure/.test(n)));
   assert.match(r.reminder.ics, /DTSTART;VALUE=DATE:20261202/);
+});
+
+test("all price and rating look-ups run in parallel", async () => {
+  const running = new Set<string>();
+  let peak = 0;
+  await runOffline(RequestSchema.parse({ persona: "arjun", focus: ["longevity"], mode: "either", simulateFailure: true }), (e) => {
+    if (e.type !== "step" || !/checkLivePrice|getRating/.test(e.tool)) return;
+    if (e.status === "running") running.add(e.id); else running.delete(e.id);
+    peak = Math.max(peak, running.size);
+  });
+  assert.ok(peak >= 10, `expected all look-ups in flight together, peak was ${peak}`);
 });
 
 test("different focus or mode gives different plans", () => {

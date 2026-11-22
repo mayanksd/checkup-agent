@@ -218,27 +218,31 @@ export default function Home() {
     <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
       <header className="relative pt-8 text-center sm:pt-0">
         <StartOverButton onClick={startOver} className="absolute right-0 top-0" />
-        <p className="text-sm font-semibold tracking-wide text-emerald-700">🧬 CHECKUP AGENT</p>
+        <p className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide text-emerald-700">
+          {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG, no optimisation needed */}
+          <img src="/icon.svg" alt="" width={28} height={28} className="h-7 w-7" />
+          CHECKUP AGENT
+        </p>
         <h1 className="mt-1 text-3xl font-bold sm:text-4xl">Max your free health check-up.</h1>
         <p className="mt-1 text-slate-600">It&apos;s one life — build it for longevity.</p>
-        <div className="mt-2 text-xs text-slate-500">
+        <div className="mt-3 text-lg text-slate-700">
           {editingSum ? (
-            <span className="inline-flex flex-wrap items-center justify-center gap-1">
-              Annual sum insured ₹
+            <span className="inline-flex flex-wrap items-center justify-center gap-2">
+              Sum insured ₹
               <input
                 autoFocus inputMode="numeric" value={sumDraft}
                 onChange={(e) => setSumDraft(e.target.value.replace(/[^\d]/g, "").slice(0, 10))}
                 onKeyDown={(e) => e.key === "Enter" && saveSum()}
-                className="w-28 rounded border border-slate-300 px-1 py-0.5 text-slate-800"
+                className="w-36 rounded-lg border border-emerald-400 px-2 py-1 text-slate-900"
                 aria-label="Annual sum insured in rupees"
               />
-              → {inr(limitFor(Number(sumDraft) || 0))} check-up (1%)
-              <button onClick={saveSum} className="font-semibold text-emerald-700 underline">Save</button>
+              → <b>{inr(limitFor(Number(sumDraft) || 0))}</b> free check-up (1%)
+              <button onClick={saveSum} className="rounded-full bg-emerald-600 px-3 py-1 text-sm font-semibold text-white">✓ Save</button>
             </span>
           ) : (
-            <span>
-              Assuming {inr(sumInsured)} annual sum insured → {inr(limitFor(sumInsured))} check-up (1%) ·{" "}
-              <button onClick={() => { setSumDraft(String(sumInsured)); setEditingSum(true); }} className="font-semibold text-emerald-700 underline">Change</button>
+            <span className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+              <span>Assuming <b>{inr(sumInsured)}</b> sum insured → <b className="text-emerald-700">{inr(limitFor(sumInsured))} free check-up</b> (1%)</span>
+              <button onClick={() => { setSumDraft(String(sumInsured)); setEditingSum(true); }} className="rounded-full border border-emerald-600 bg-white px-3 py-1 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-50">✏️ Change</button>
             </span>
           )}
         </div>

@@ -183,7 +183,7 @@ function buildResult(s: Session, driver: AgentResult["driver"]): AgentResult {
       coverage: coverage.find((x) => x.providerId === p.id)?.status ?? "covered",
     };
   });
-  const allPicks = [...s.plan!.picks, ...s.plan!.prescriptionOnly];
+  const allPicks = [...s.plan!.picks, ...s.plan!.prescriptionOnly, ...s.plan!.overLimit];
   return {
     persona: { name: policy.name, age: policy.age },
     policy: {

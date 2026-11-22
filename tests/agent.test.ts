@@ -155,3 +155,11 @@ test("new focus chips map to the right providers", () => {
   assert.ok(plan(["fullbody"], "lab").some((p) => p.name === "Cent Health" || p.name === "Nura"));
   assert.ok(plan(["gut"]).some((p) => p.id === "deep-holistics"));
 });
+
+test("over-limit tests go to 'also worth considering', never the plan", () => {
+  const plan = buildPlan({ candidates: providers.map(listedCandidate), limit: 10000, focus: ["fullbody"], mode: "lab" });
+  assert.ok(plan.picks.every((p) => p.priceInr <= 10000));
+  assert.deepEqual(plan.overLimit.map((p) => p.provider.id).sort(), ["cent-fullbody", "nura-ai", "ultrahuman-pro"]);
+  assert.ok(plan.overLimit.every((p) => /you'd pay for this one yourself/.test(p.why)));
+  assert.deepEqual(plan.prescriptionOnly.map((p) => p.provider.id), ["cent-genetic"]);
+});

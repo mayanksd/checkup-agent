@@ -346,22 +346,58 @@ export default function Home() {
   );
 }
 
-function PickCard({ pick, mapsUrl, ratingLabel, genetic }: { pick: PlanPick; mapsUrl: string; ratingLabel: string; genetic?: boolean }) {
+/** Live labels stay as-is; stored ones ("… · Google · 22 Nov") show the date as a small tag. */
+function splitRating(label: string) {
+  const m = label.match(/^(.*) · Google · (.+)$/);
+  return m ? { main: m[1], asOf: `as of ${m[2]}` } : { main: label, asOf: "" };
+}
+
+function PickCard({ pick, mapsUrl, ratingLabel, calm }: { pick: PlanPick; mapsUrl: string; ratingLabel: string; calm?: boolean }) {
   const p = pick.provider;
+  const { main, asOf } = splitRating(ratingLabel);
   return (
-    <div className={`rounded-2xl border p-4 ${genetic ? "border-violet-200 bg-violet-50" : "border-emerald-200 bg-white"}`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-semibold">{p.name} · {p.product}</h3>
-        <span className="text-lg font-bold">{inr(pick.priceInr)} <span className="text-xs font-normal text-slate-500">{pick.priceLabel}</span></span>
+    <div className={`rounded-2xl p-4 ${calm ? "border border-slate-200 bg-slate-50" : "bg-white text-slate-900 shadow-md"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold">{p.name} · {p.product}</h3>
+          <p className="text-sm">{main} {asOf && <span className="text-xs text-slate-400">{asOf}</span>}</p>
+        </div>
+        <div className="sm:text-right">
+          <div className={`${calm ? "text-lg" : "text-3xl"} font-extrabold`}>{inr(pick.priceInr)}</div>
+          <div className="text-xs text-slate-500">{pick.priceLabel}</div>
+        </div>
       </div>
-      <p className="mt-1 text-sm text-slate-600">{p.covers}</p>
-      <p className="mt-1 text-sm">{ratingLabel} · {p.mode} · {p.location}</p>
-      <p className="mt-2 text-sm"><b>{genetic ? "Note:" : "Why this:"}</b> {pick.why}</p>
+      <p className="mt-2 text-sm text-slate-600">{p.covers}</p>
+      <p className="mt-1 text-xs text-slate-500">{p.mode} · {p.location}</p>
+      <p className="mt-2 text-sm"><b>{calm ? "Note:" : "Why this:"}</b> {pick.why}</p>
       <div className="mt-3 flex flex-wrap gap-2 text-sm">
-        <a href={p.bookingUrl} target="_blank" rel="noopener noreferrer" className="rounded-full bg-emerald-600 px-3 py-1.5 font-medium text-white">Book now →</a>
+        <a href={p.bookingUrl} target="_blank" rel="noopener noreferrer" className={`rounded-full px-3 py-1.5 font-medium ${calm ? "border border-slate-400 bg-white" : "bg-emerald-600 text-white"}`}>Book now →</a>
         <a href={p.contactUrl} target="_blank" rel="noopener noreferrer" className="rounded-full border border-slate-300 bg-white px-3 py-1.5">Talk to the lab →</a>
         <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="rounded-full border border-slate-300 bg-white px-3 py-1.5">See reviews on Google →</a>
       </div>
+    </div>
+  );
+}
+
+const CONFETTI_COLORS = ["#10b981", "#14b8a6", "#f59e0b", "#f43f5e", "#6366f1", "#facc15"];
+
+/** A light, one-off burst. Skipped entirely for reduced-motion users. */
+function Confetti() {
+  const [pieces, setPieces] = useState<{ left: number; delay: number; color: string; rotate: number }[]>([]);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    setPieces(Array.from({ length: 36 }, (_, i) => ({
+      left: Math.random() * 100, delay: Math.random() * 0.4, color: CONFETTI_COLORS[i % CONFETTI_COLORS.length], rotate: Math.random() * 360,
+    })));
+    const t = setTimeout(() => setPieces([]), 2600);
+    return () => clearTimeout(t);
+  }, []);
+  if (!pieces.length) return null;
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
+      {pieces.map((c, i) => (
+        <span key={i} className="confetti" style={{ left: `${c.left}%`, background: c.color, animationDelay: `${c.delay}s`, transform: `rotate(${c.rotate}deg)` }} />
+      ))}
     </div>
   );
 }
@@ -398,18 +434,34 @@ function Result({ result, refEl, onIcs }: { result: AgentResult; refEl: React.Re
         </div>
       </Section>
 
-      <Section title="Your recommended plan">
-        <div className="mb-3 rounded-xl bg-emerald-50 p-3 text-center font-semibold text-emerald-800">{plan.usedText}</div>
-        <div className="flex flex-col gap-3">
-          {plan.picks.length === 0 && <p className="text-sm">No combination fits the limit for these choices — try “Either” for mode.</p>}
-          {plan.picks.map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} ratingLabel={result.ratingLabels[p.provider.id]} />)}
-        </div>
-      </Section>
+      {plan.picks.length > 0 ? (
+        <section className="rounded-3xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 p-4 text-white shadow-lg sm:p-6">
+          <Confetti />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-bold">Your recommended plan</h2>
+            <span className="rounded-full bg-white px-4 py-1.5 text-base font-extrabold text-emerald-700 shadow">✅ 100% reimbursable</span>
+          </div>
+          <div className="mt-4">
+            <div className="flex justify-between text-lg font-extrabold"><span>{plan.usedText}</span><span>{Math.round((plan.total / plan.limit) * 100)}%</span></div>
+            <div className="mt-2 h-4 overflow-hidden rounded-full bg-white/30" role="progressbar" aria-valuenow={plan.total} aria-valuemin={0} aria-valuemax={plan.limit} aria-label="Check-up budget used">
+              <div className="h-full rounded-full bg-white" style={{ width: `${Math.min(100, (plan.total / plan.limit) * 100)}%` }} />
+            </div>
+          </div>
+          <div className="mt-4 flex flex-col gap-3">
+            {plan.picks.map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} ratingLabel={result.ratingLabels[p.provider.id]} />)}
+          </div>
+        </section>
+      ) : (
+        <Section title="Your recommended plan">
+          <p className="text-sm">No combination fits your {inr(plan.limit)} limit for these choices — try “Either” for mode, or see the options below.</p>
+        </Section>
+      )}
 
-      {plan.prescriptionOnly.length > 0 && (
-        <Section title="🧬 Genetic risk (separate)">
-          <p className="mb-3 text-sm">Covered only with a doctor&apos;s prescription — get one, then claim.</p>
-          {plan.prescriptionOnly.map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} ratingLabel={result.ratingLabels[p.provider.id]} genetic />)}
+      {(plan.prescriptionOnly.length > 0 || plan.overLimit.length > 0) && (
+        <Section title="Also worth considering (you pay, or needs a prescription)">
+          <div className="flex flex-col gap-3">
+            {[...plan.prescriptionOnly, ...plan.overLimit].map((p) => <PickCard key={p.provider.id} pick={p} mapsUrl={result.mapsUrls[p.provider.id]} ratingLabel={result.ratingLabels[p.provider.id]} calm />)}
+          </div>
         </Section>
       )}
 

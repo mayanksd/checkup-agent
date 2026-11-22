@@ -13,8 +13,8 @@ Track: **Commerce & payments**. It helps a shopper compare options, decide, and 
 3. **Build & Book my plan →** runs the agent. A **friendly live log** shows one line per stage (📄 policy · 🛡️ injection caught · 🔍 options · 💸 prices · ⭐ ratings · ✅ coverage · 🧮 plan · 📅 reminder). **🔧 Show technical details** reveals the raw tool calls with ✓/⚠️ and timings.
 4. The result shows:
    - a comparison table of the shortlisted options
-   - plan cards with **Book now →**, **Talk to the lab →** and **See reviews on Google →** buttons
-   - a separate genetic card (covered only with a doctor's prescription)
+   - a big green **✅ 100% reimbursable** plan with a "₹X of ₹30,000 used" progress bar and a light confetti burst (skipped for reduced-motion users). Each card shows "⭐ 4.6 (123 Google reviews)" and has **Book now →**, **Talk to the lab →** and **See reviews on Google →** buttons
+   - a calmer **Also worth considering (you pay, or needs a prescription)** section for the prescription-only genetic test and anything above your limit
    - a claim checklist, the total used, and an **Add reminder** (.ics) button
 
 ## How to run

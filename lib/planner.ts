@@ -114,6 +114,8 @@ export interface Plan {
   focus: Focus[];
   mode: ModeChoice;
   prescriptionOnly: PlanPick[];
+  /** Covered-type tests that cost more than the limit (you'd pay yourself). */
+  overLimit: PlanPick[];
   excluded: { providerId: string; reason: string }[];
 }
 
@@ -130,6 +132,7 @@ export function buildPlan(input: { candidates: Candidate[]; limit: number; focus
   const excluded: Plan["excluded"] = [];
   const pool: { c: Candidate; p: Provider }[] = [];
   const prescription: { c: Candidate; p: Provider }[] = [];
+  const over: { c: Candidate; p: Provider }[] = [];
   const seen = new Set<string>();
 
   for (const c of input.candidates) {
@@ -141,7 +144,7 @@ export function buildPlan(input: { candidates: Candidate[]; limit: number; focus
     if (!p.cityConfirmed) excluded.push({ providerId: p.id, reason: "City not confirmed" });
     else if (!modeAllows(mode, p.mode)) excluded.push({ providerId: p.id, reason: `Not ${mode === "home" ? "home collection" : "a lab visit"}` });
     else if (p.needsPrescription) prescription.push(cand);
-    else if (price > limit) excluded.push({ providerId: p.id, reason: "Over the limit" });
+    else if (price > limit) { excluded.push({ providerId: p.id, reason: "Over the limit" }); over.push(cand); }
     else pool.push(cand);
   }
   pool.sort((a, b) => a.p.id.localeCompare(b.p.id));
@@ -203,6 +206,7 @@ export function buildPlan(input: { candidates: Candidate[]; limit: number; focus
     usedText: `${inr(total)} of ${inr(limit)} used`,
     focus, mode,
     prescriptionOnly: prescription.map((x) => ({ ...toPick(x, []), why: "Covered only with a doctor's prescription — get one, then claim." })),
+    overLimit: over.map((x) => ({ ...toPick(x, []), why: `Costs more than your ${inr(limit)} check-up — you'd pay for this one yourself.` })),
     excluded,
   };
 }

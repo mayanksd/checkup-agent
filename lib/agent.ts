@@ -13,6 +13,9 @@ import type { AgentEvent, AgentResult, ShortlistRow } from "./types.ts";
 
 type Emit = (e: AgentEvent) => void;
 
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const milestone = (s: { emit: Emit }, key: string, emoji: string, text: string) => s.emit({ type: "milestone", key, emoji, text });
+
 interface Session {
   req: {
     persona: AgentRequest["persona"]; profile?: AgentRequest["profile"]; sumInsured: number;
@@ -54,9 +57,8 @@ async function doGetPolicy(s: Session) {
   const p = await timed(s, "getPolicy", () => getPolicy(s.req.persona, { sumInsured: s.req.sumInsured, profile: s.req.profile }), (r) => ({
     text: `${r.name}${r.age != null ? `, ${r.age}` : ""} · limit ${inr(r.limit)} (1% of ${inr(r.sumInsured)}) · ${r.route}`,
   }));
-  if (!s.policy && p.ignoredLines > 0) {
-    s.emit({ type: "note", icon: "🛡️", text: `Ignored ${p.ignoredLines} suspicious instruction${p.ignoredLines > 1 ? "s" : ""} in the policy` });
-  }
+  milestone(s, "policy", "📄", `Read your policy — ${inr(p.limit)} to spend`);
+  if (p.ignoredLines > 0) milestone(s, "shield", "🛡️", `Spotted and ignored ${plural(p.ignoredLines, "sneaky instruction")}`);
   s.policy = p;
   return p;
 }
@@ -66,6 +68,7 @@ async function doSearch(s: Session) {
     text: `${r.length} Bengaluru options for ${s.req.focus.map((f) => FOCUS_LABEL[f]).join(" + ")}`,
   }));
   s.shortlist = list;
+  milestone(s, "search", "🔍", `Found ${plural(list.length, "option")} in Bengaluru for ${s.req.focus.map((f) => FOCUS_LABEL[f]).join(" + ")}`);
   return list;
 }
 
@@ -93,6 +96,12 @@ async function doCoverage(s: Session, ids: string[]) {
     text: `${r.filter((c) => c.status === "covered").length} covered · ${r.filter((c) => c.status === "needs prescription").length} need prescription · ${r.filter((c) => c.status === "not covered").length} not covered`,
   }));
   s.coverage = r;
+  const count = (st: CoverageResult["status"]) => r.filter((c) => c.status === st).length;
+  const extra = [
+    count("needs prescription") ? `${count("needs prescription")} ${count("needs prescription") === 1 ? "needs" : "need"} a prescription` : "",
+    count("not covered") ? `${count("not covered")} not covered` : "",
+  ].filter(Boolean);
+  milestone(s, "coverage", "✅", `Checked coverage — ${count("covered")} covered${extra.length ? `, ${extra.join(", ")}` : ""}`);
   return r;
 }
 
@@ -119,6 +128,7 @@ async function doPlan(s: Session, candidateIds: string[], requestedLimit?: numbe
     warn: r.picks.length === 0,
   }));
   s.plan = plan;
+  milestone(s, "plan", "🧮", plan.picks.length ? `Built your plan — ${inr(plan.total)} of ${inr(plan.limit)}` : "No combination fits your limit — see the options below");
   return plan;
 }
 
@@ -128,6 +138,7 @@ async function doReminder(s: Session, start?: string) {
     text: `Reminder on ${r.remindOn} (benefit resets ${r.resetsOn})`,
   }));
   s.reminder = r;
+  milestone(s, "reminder", "📅", "Set a reminder before your benefit resets");
   return r;
 }
 
@@ -139,6 +150,10 @@ function ensureLookups(s: Session): Promise<void> {
       s.prices.has(p.id) ? null : doPrice(s, p),
       s.ratings.has(p.id) ? null : doRating(s, p),
     ]));
+    const live = list.filter((p) => s.prices.get(p.id)?.source === "live").length;
+    milestone(s, "prices", "💸", `Checked prices at ${plural(list.length, "lab")} — ${live} live, ${list.length - live} listed`);
+    const rated = list.filter((p) => s.ratings.get(p.id)?.rating != null).length;
+    milestone(s, "ratings", "⭐", `Got Google ratings for ${plural(rated, "lab")}`);
   })();
   return s.lookups;
 }
@@ -189,7 +204,7 @@ function newSession(req: AgentRequest, emit: Emit): Session {
   let focus = req.focus;
   let cleanNote = "";
   if (note.kind !== "empty" && note.stripped > 0) {
-    emit({ type: "note", icon: "🛡️", text: `Ignored ${note.stripped} instruction-like line${note.stripped > 1 ? "s" : ""} in your note` });
+    emit({ type: "milestone", key: "shield-note", emoji: "🛡️", text: `Spotted and ignored ${plural(note.stripped, "sneaky instruction")} in your note` });
   }
   if (note.kind === "redirect") {
     emit({ type: "note", icon: "💬", text: note.message });
@@ -228,7 +243,7 @@ const MODE_TEXT: Record<ModeChoice, string> = { home: "home sample collection", 
 export async function runAgent(req: AgentRequest, emit: Emit, opts: { model?: LanguageModel } = {}): Promise<AgentResult> {
   const s = newSession(req, emit);
   if (!opts.model && !hasApiKey()) {
-    emit({ type: "note", icon: "ℹ️", text: "ANTHROPIC_API_KEY not set — running the same tools in a fixed order (offline mode)" });
+    emit({ type: "note", icon: "ℹ️", text: "Offline mode (no API key) — same steps, listed prices" });
     s.notes.push("Offline mode: live prices and ratings need an API key, so listed prices are shown.");
     await completePipeline(s);
     return buildResult(s, "offline");

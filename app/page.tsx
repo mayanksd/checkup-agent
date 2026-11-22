@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { AgentEvent, AgentResult, NoteEvent, StepEvent } from "@/lib/types";
+import type { AgentEvent, AgentResult, MilestoneEvent, NoteEvent, StepEvent } from "@/lib/types";
 import type { Focus, ModeChoice } from "@/lib/guard";
 import type { PlanPick } from "@/lib/planner";
 
@@ -96,7 +96,9 @@ export default function Home() {
   const [note, setNote] = useState("");
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [running, setRunning] = useState(false);
-  const [log, setLog] = useState<(StepEvent | NoteEvent)[]>([]);
+  const [friendly, setFriendly] = useState<(MilestoneEvent | NoteEvent)[]>([]);
+  const [tech, setTech] = useState<StepEvent[]>([]);
+  const [showTech, setShowTech] = useState(false);
   const [result, setResult] = useState<AgentResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [memory, setMemory] = useState<Memory | null>(null);
@@ -132,7 +134,7 @@ export default function Home() {
       persona: p, profile, sumInsured: override?.sumInsured ?? sumInsured,
       focus: override?.focus ?? focus, mode: override?.mode ?? mode, note: override ? "" : note, simulateFailure,
     };
-    setRunning(true); setLog([]); setResult(null); setError(null);
+    setRunning(true); setFriendly([]); setTech([]); setResult(null); setError(null);
     try {
       const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!res.ok || !res.body) {
@@ -151,8 +153,9 @@ export default function Home() {
         for (const line of lines) {
           if (!line.trim()) continue;
           const e = JSON.parse(line) as AgentEvent;
-          if (e.type === "step") setLog((l) => { const i = l.findIndex((x) => x.type === "step" && x.id === e.id); return i < 0 ? [...l, e] : l.map((x, j) => (j === i ? e : x)); });
-          else if (e.type === "note") setLog((l) => [...l, e]);
+          if (e.type === "step") setTech((l) => { const i = l.findIndex((x) => x.id === e.id); return i < 0 ? [...l, e] : l.map((x, j) => (j === i ? e : x)); });
+          else if (e.type === "milestone") setFriendly((l) => { const i = l.findIndex((x) => x.type === "milestone" && x.key === e.key); return i < 0 ? [...l, e] : l.map((x, j) => (j === i ? e : x)); });
+          else if (e.type === "note") setFriendly((l) => [...l, e]);
           else if (e.type === "error") setError(e.message);
           else if (e.type === "result") {
             setResult(e.result);
@@ -290,20 +293,47 @@ export default function Home() {
 
       {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</div>}
 
-      {log.length > 0 && (
-        <Section title={running ? "Agent at work…" : "What the agent did"}>
-          <ul className="space-y-1 font-mono text-xs sm:text-sm">
-            {log.map((s, i) => s.type === "note" ? (
-              <li key={`n${i}`} className="font-sans font-medium text-slate-800">{s.icon} {s.text}</li>
+      {(friendly.length > 0 || running) && (
+        <Section title={running ? "Working on your plan…" : "Here's what I did"}>
+          <ul className="space-y-2">
+            {friendly.map((m, i) => m.type === "milestone" ? (
+              <li key={m.key} className="flex items-start gap-3 animate-[fadeIn_.3s_ease-out]">
+                <span className="text-xl leading-6">{m.emoji}</span>
+                <span className="flex-1 leading-6">{m.text}</span>
+                <span className="font-bold text-emerald-600">✓</span>
+              </li>
             ) : (
-              <li key={s.id} className="flex gap-2">
-                <span className="w-5 shrink-0">{s.status === "running" ? "⏳" : s.status === "ok" ? "✓" : s.status === "warn" ? "⚠️" : "✗"}</span>
-                <span className="shrink-0 font-semibold">{s.tool}</span>
-                <span className="min-w-0 flex-1 text-slate-600">{s.summary}</span>
-                {s.ms != null && <span className="shrink-0 text-slate-400">{(s.ms / 1000).toFixed(1)}s</span>}
+              <li key={`n${i}`} className="flex items-start gap-3 text-sm text-slate-600">
+                <span className="text-xl leading-6">{m.icon}</span>
+                <span className="flex-1 leading-6">{m.text}</span>
               </li>
             ))}
+            {running && (
+              <li className="flex items-center gap-3 text-slate-500">
+                <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                <span>Working on it…</span>
+              </li>
+            )}
           </ul>
+          {tech.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <button onClick={() => setShowTech((v) => !v)} className="text-xs font-medium text-slate-500 underline" aria-expanded={showTech}>
+                🔧 {showTech ? "Hide" : "Show"} technical details
+              </button>
+              {showTech && (
+                <ul className="mt-2 space-y-1 font-mono text-xs">
+                  {tech.map((t) => (
+                    <li key={t.id} className="flex gap-2">
+                      <span className="w-5 shrink-0">{t.status === "running" ? "⏳" : t.status === "ok" ? "✓" : t.status === "warn" ? "⚠️" : "✗"}</span>
+                      <span className="shrink-0 font-semibold">{t.tool}</span>
+                      <span className="min-w-0 flex-1 text-slate-600">{t.summary}</span>
+                      {t.ms != null && <span className="shrink-0 text-slate-400">{(t.ms / 1000).toFixed(1)}s</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </Section>
       )}
 

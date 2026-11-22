@@ -11,6 +11,8 @@ export interface StepEvent {
   ms?: number;
 }
 export interface NoteEvent { type: "note"; icon: string; text: string }
+/** One friendly line per stage; a later event with the same key replaces the earlier one. */
+export interface MilestoneEvent { type: "milestone"; key: string; emoji: string; text: string }
 
 export interface ShortlistRow {
   providerId: string;
@@ -46,4 +48,4 @@ export interface AgentResult {
 
 export interface ResultEvent { type: "result"; result: AgentResult }
 export interface ErrorEvent { type: "error"; message: string }
-export type AgentEvent = StepEvent | NoteEvent | ResultEvent | ErrorEvent;
+export type AgentEvent = StepEvent | NoteEvent | MilestoneEvent | ResultEvent | ErrorEvent;

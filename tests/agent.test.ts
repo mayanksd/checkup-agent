@@ -35,13 +35,22 @@ test("injected policy line never changes the limit", async () => {
   assert.ok(!p.rules.some((r) => /ignore|10,00,000/i.test(r)));
   assert.equal(getPolicy("arjun").ignoredLines, 0);
 
-  const notes: string[] = [];
+  const lines: string[] = [];
   const r = await runOffline(RequestSchema.parse({ persona: "priya", focus: ["heart"], mode: "lab", simulateFailure: true }), (e) => {
-    if (e.type === "note") notes.push(e.text);
+    if (e.type === "milestone") lines.push(`${e.emoji} ${e.text}`);
   });
   assert.equal(r.plan.limit, 30000);
   assert.ok(r.plan.total <= 30000);
-  assert.ok(notes.includes("Ignored 1 suspicious instruction in the policy"));
+  assert.deepEqual(lines, [
+    "📄 Read your policy — ₹30,000 to spend",
+    "🛡️ Spotted and ignored 1 sneaky instruction",
+    "🔍 Found 5 options in Bengaluru for Heart",
+    "💸 Checked prices at 5 labs — 0 live, 5 listed",
+    "⭐ Got Google ratings for 5 labs",
+    "✅ Checked coverage — 4 covered, 1 needs a prescription",
+    `🧮 Built your plan — ₹${r.plan.total.toLocaleString("en-IN")} of ₹30,000`,
+    "📅 Set a reminder before your benefit resets",
+  ]);
 });
 
 test("tool failure still yields a plan with listed prices and no ratings", async () => {

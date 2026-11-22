@@ -44,7 +44,7 @@ test("agent loop: model-chosen tool calls produce a plan; a hostile limit is cla
     RequestSchema.parse({ persona: "priya", focus: ["heart"], mode: "lab", simulateFailure: true }),
     (e) => {
       if (e.type === "step" && e.status !== "running") tools.push(e.tool);
-      if (e.type === "note") notes.push(e.text);
+      if (e.type === "milestone") notes.push(e.text);
     },
     { model },
   );
@@ -54,7 +54,7 @@ test("agent loop: model-chosen tool calls produce a plan; a hostile limit is cla
   assert.equal(r.plan.limit, 30000);
   assert.ok(r.plan.total <= 30000 && r.plan.picks.length > 0);
   assert.ok(!r.plan.picks.some((p) => p.provider.id === "supprx-ultra"));
-  assert.ok(notes.includes("Ignored 1 suspicious instruction in the policy"));
+  assert.ok(notes.includes("Spotted and ignored 1 sneaky instruction"));
 });
 
 test("agent loop: if the model stops early, code finishes the plan", async () => {

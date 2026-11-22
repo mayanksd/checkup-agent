@@ -6,21 +6,35 @@ import type { Focus, ModeChoice } from "@/lib/guard";
 import type { PlanPick } from "@/lib/planner";
 
 const NOTE_MAX = 300;
-const MEMORY_KEY = "checkup-agent:v1";
+const MEMORY_KEY = "checkup-agent:v2";
+const DEFAULT_SUM_INSURED = 30_00_000;
+const SUM_MIN = 1_00_000;
+const SUM_MAX = 10_00_00_000;
+const limitFor = (sum: number) => Math.round(sum * 0.01);
 
 const PERSONAS = [
   { id: "arjun", label: "👨 Arjun, 27" },
   { id: "priya", label: "👩 Priya, 31" },
+  { id: "custom", label: "✏️ Enter my own" },
 ] as const;
 type PersonaId = (typeof PERSONAS)[number]["id"];
+type Gender = "" | "Male" | "Female" | "Other";
 
-const FOCUS_OPTIONS: { id: Exclude<Focus, "general">; label: string }[] = [
+type FocusChip = { id: Exclude<Focus, "general">; label: string };
+const TRENDING: FocusChip[] = [
+  { id: "longevity", label: "⏳ Longevity" },
+  { id: "fullbody", label: "🧠 Full-body scan (MRI/AI)" },
+  { id: "genetic", label: "🧬 Genetic risk" },
+  { id: "gut", label: "🦠 Gut microbiome" },
+  { id: "stamina", label: "🏃 Stamina (VO2 max)" },
+];
+const CLASSICS: FocusChip[] = [
   { id: "heart", label: "❤️ Heart" },
   { id: "metabolism", label: "🍬 Sugar & metabolism" },
   { id: "hormones", label: "⚡ Hormones" },
-  { id: "longevity", label: "⏳ Longevity" },
-  { id: "gut", label: "🦠 Gut" },
-  { id: "genetic", label: "🧬 Genetic risk" },
+  { id: "thyroid", label: "🦋 Thyroid" },
+  { id: "bone", label: "🦴 Bone density" },
+  { id: "vitamins", label: "💊 Vitamins" },
 ];
 const MODE_OPTIONS: { id: ModeChoice; label: string }[] = [
   { id: "home", label: "🏠 Home sample collection" },
@@ -28,7 +42,7 @@ const MODE_OPTIONS: { id: ModeChoice; label: string }[] = [
   { id: "either", label: "Either" },
 ];
 
-interface Memory { persona: PersonaId; focus: Focus[]; mode: ModeChoice; planText: string; usedText: string }
+interface Memory { persona: PersonaId; focus: Focus[]; mode: ModeChoice; sumInsured: number; planText: string; usedText: string }
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
@@ -71,6 +85,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function Home() {
   const [persona, setPersona] = useState<PersonaId | null>(null);
+  const [name, setName] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState<Gender>("");
+  const [sumInsured, setSumInsured] = useState(DEFAULT_SUM_INSURED);
+  const [editingSum, setEditingSum] = useState(false);
+  const [sumDraft, setSumDraft] = useState(String(DEFAULT_SUM_INSURED));
   const [focus, setFocus] = useState<Focus[]>([]);
   const [mode, setMode] = useState<ModeChoice>("either");
   const [note, setNote] = useState("");
@@ -87,10 +107,31 @@ export default function Home() {
   const toggleFocus = (f: Focus) =>
     setFocus((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : cur.length >= 2 ? cur : [...cur, f]));
 
-  async function run(override?: Pick<Memory, "persona" | "focus" | "mode">) {
-    const p = override?.persona ?? persona;
-    if (!p) { setError("Pick who you are first 🙂"); return; }
-    const body = { persona: p, focus: override?.focus ?? focus, mode: override?.mode ?? mode, note: override ? "" : note, simulateFailure };
+  const ageError = (() => {
+    if (persona !== "custom" || !age.trim()) return null;
+    const n = Number(age);
+    return Number.isInteger(n) && n >= 18 && n <= 90 ? null : "Age must be between 18 and 90";
+  })();
+
+  function saveSum() {
+    const n = Number(sumDraft.replace(/[^\d]/g, ""));
+    if (!Number.isInteger(n) || n < SUM_MIN || n > SUM_MAX) {
+      setError(`Sum insured must be between ${inr(SUM_MIN)} and ${inr(SUM_MAX)}.`);
+      return;
+    }
+    setError(null); setSumInsured(n); setEditingSum(false);
+  }
+
+  async function run(override?: Pick<Memory, "persona" | "focus" | "mode" | "sumInsured">) {
+    const p: PersonaId = override?.persona ?? persona ?? "arjun"; // default persona if left empty
+    if (!override && ageError) { setError(ageError); return; }
+    const profile = p === "custom" && !override
+      ? { name: name.trim(), ...(age.trim() ? { age: Number(age) } : {}), ...(gender ? { gender } : {}) }
+      : undefined;
+    const body = {
+      persona: p, profile, sumInsured: override?.sumInsured ?? sumInsured,
+      focus: override?.focus ?? focus, mode: override?.mode ?? mode, note: override ? "" : note, simulateFailure,
+    };
     setRunning(true); setLog([]); setResult(null); setError(null);
     try {
       const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -116,7 +157,7 @@ export default function Home() {
           else if (e.type === "result") {
             setResult(e.result);
             const m: Memory = {
-              persona: p, focus: body.focus, mode: body.mode,
+              persona: p, focus: body.focus, mode: body.mode, sumInsured: body.sumInsured,
               planText: e.result.plan.picks.map((x) => `${x.provider.name} ${x.provider.product}`).join(" + ") || "no plan",
               usedText: e.result.plan.usedText,
             };
@@ -135,6 +176,7 @@ export default function Home() {
   function rebuild() {
     if (!memory) return;
     setPersona(memory.persona); setFocus(memory.focus); setMode(memory.mode); setNote("");
+    setSumInsured(memory.sumInsured); setSumDraft(String(memory.sumInsured));
     run(memory);
   }
 
@@ -149,8 +191,30 @@ export default function Home() {
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
       <header className="text-center">
-        <h1 className="text-2xl font-bold sm:text-3xl">🧬 Checkup Agent — Max your free ₹30,000 health check-up</h1>
-        <p className="mt-1 text-slate-600">Already covered by your policy · pay at the lab, claim it back.</p>
+        <p className="text-sm font-semibold tracking-wide text-emerald-700">🧬 CHECKUP AGENT</p>
+        <h1 className="mt-1 text-3xl font-bold sm:text-4xl">Max your free health check-up.</h1>
+        <p className="mt-1 text-slate-600">It&apos;s one life — build it for longevity.</p>
+        <div className="mt-2 text-xs text-slate-500">
+          {editingSum ? (
+            <span className="inline-flex flex-wrap items-center justify-center gap-1">
+              Annual sum insured ₹
+              <input
+                autoFocus inputMode="numeric" value={sumDraft}
+                onChange={(e) => setSumDraft(e.target.value.replace(/[^\d]/g, "").slice(0, 10))}
+                onKeyDown={(e) => e.key === "Enter" && saveSum()}
+                className="w-28 rounded border border-slate-300 px-1 py-0.5 text-slate-800"
+                aria-label="Annual sum insured in rupees"
+              />
+              → {inr(limitFor(Number(sumDraft) || 0))} check-up (1%)
+              <button onClick={saveSum} className="font-semibold text-emerald-700 underline">Save</button>
+            </span>
+          ) : (
+            <span>
+              Assuming {inr(sumInsured)} annual sum insured → {inr(limitFor(sumInsured))} check-up (1%) ·{" "}
+              <button onClick={() => { setSumDraft(String(sumInsured)); setEditingSum(true); }} className="font-semibold text-emerald-700 underline">Change</button>
+            </span>
+          )}
+        </div>
       </header>
 
       {memory && !result && !running && (
@@ -164,14 +228,31 @@ export default function Home() {
         <div className="flex flex-wrap gap-2">
           {PERSONAS.map((p) => <Chip key={p.id} active={persona === p.id} onClick={() => setPersona(p.id)}>{p.label}</Chip>)}
         </div>
+        {persona === "custom" && (
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} placeholder="Name (optional)" className="rounded-xl border border-slate-300 p-2 text-sm" />
+            <div>
+              <input value={age} inputMode="numeric" onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, "").slice(0, 2))} placeholder="Age (18–90)" className={`w-full rounded-xl border p-2 text-sm ${ageError ? "border-rose-400" : "border-slate-300"}`} />
+              {ageError && <p className="mt-1 text-xs text-rose-600">{ageError}</p>}
+            </div>
+            <select value={gender} onChange={(e) => setGender(e.target.value as Gender)} className="rounded-xl border border-slate-300 bg-white p-2 text-sm">
+              <option value="">Gender (optional)</option>
+              <option>Female</option><option>Male</option><option>Other</option>
+            </select>
+          </div>
+        )}
+        {!persona && <p className="mt-2 text-xs text-slate-500">Skip this and I&apos;ll use Arjun&apos;s profile.</p>}
       </Section>
 
       <Section title="B · What matters to you? (up to 2)">
-        <div className="flex flex-wrap gap-2">
-          {FOCUS_OPTIONS.map((f) => (
-            <Chip key={f.id} active={focus.includes(f.id)} disabled={!focus.includes(f.id) && focus.length >= 2} onClick={() => toggleFocus(f.id)}>{f.label}</Chip>
-          ))}
-        </div>
+        {[TRENDING, CLASSICS].map((row, i) => (
+          <div key={i} className="mb-2 flex flex-wrap items-center gap-2">
+            {i === 0 && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">🔥 Trending</span>}
+            {row.map((f) => (
+              <Chip key={f.id} active={focus.includes(f.id)} disabled={!focus.includes(f.id) && focus.length >= 2} onClick={() => toggleFocus(f.id)}>{f.label}</Chip>
+            ))}
+          </div>
+        ))}
         {focus.length === 0 && <p className="mt-2 text-xs text-slate-500">Skip this and I&apos;ll plan a General check-up.</p>}
       </Section>
 
@@ -203,7 +284,7 @@ export default function Home() {
           disabled={running}
           className="rounded-full bg-emerald-600 px-6 py-3 text-lg font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-60"
         >
-          {running ? "Building…" : "Build my plan →"}
+          {running ? "Building…" : "Build & Book my plan →"}
         </button>
       </div>
 
@@ -265,7 +346,7 @@ function Result({ result, refEl, onIcs }: { result: AgentResult; refEl: React.Re
         </div>
       )}
 
-      <Section title={`Options compared for ${result.persona.name}`}>
+      <Section title={`Options compared for ${result.persona.name}${result.persona.age != null ? `, ${result.persona.age}` : ""}`}>
         <div className="-mx-4 overflow-x-auto px-4">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="text-xs uppercase text-slate-500">

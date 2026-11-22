@@ -1,17 +1,22 @@
 // Deterministic money maths, coverage and ranking. The model never does any of this.
 import { policies, type PersonaId, type Policy } from "../data/policies.ts";
 import { providers, providerById, PRICES_AS_OF_LABEL, type Provider, type Mode } from "../data/providers.ts";
-import { sanitizePolicyText, type Focus, type ModeChoice } from "./guard.ts";
+import { sanitizePolicyText, checkupLimitFor, type Focus, type ModeChoice, type Profile } from "./guard.ts";
 
 export const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
 
 export const FOCUS_LABEL: Record<Focus, string> = {
+  longevity: "Longevity",
+  fullbody: "Full-body scan",
+  genetic: "Genetic",
+  gut: "Gut microbiome",
+  stamina: "Stamina",
   heart: "Heart",
   metabolism: "Sugar & metabolism",
   hormones: "Hormones",
-  longevity: "Longevity",
-  gut: "Gut",
-  genetic: "Genetic risk",
+  thyroid: "Thyroid",
+  bone: "Bone density",
+  vitamins: "Vitamins",
   general: "General",
 };
 
@@ -22,7 +27,8 @@ export const modeAllows = (choice: ModeChoice, mode: Mode) =>
 export interface PolicySummary {
   personaId: PersonaId;
   name: string;
-  age: number;
+  age: number | null;
+  sumInsured: number;
   limit: number;
   route: string;
   claimWithinDays: number;
@@ -32,14 +38,18 @@ export interface PolicySummary {
   ignoredLines: number;
 }
 
-export function getPolicy(personaId: PersonaId): PolicySummary {
+export function getPolicy(personaId: PersonaId, opts: { sumInsured?: number; profile?: Profile } = {}): PolicySummary {
   const p: Policy = policies[personaId];
   const { rules, ignored } = sanitizePolicyText(p.policyText);
+  const sumInsured = opts.sumInsured ?? p.sumInsured;
+  const custom = personaId === "custom" ? opts.profile : undefined;
   return {
     personaId,
-    name: p.name,
-    age: p.age,
-    limit: p.checkupLimit, // always from structured data, never from policyText
+    name: custom?.name || p.name,
+    age: custom ? custom.age ?? null : p.age,
+    sumInsured,
+    // always from structured data (validated sum insured × 1%), never from policyText
+    limit: checkupLimitFor(sumInsured),
     route: p.claimRoute,
     claimWithinDays: p.claimWithinDays,
     policyYearStart: p.policyYearStart,
@@ -203,7 +213,7 @@ function better(a: number[], aKey: string, b: number[], bKey: string): boolean {
 }
 
 // ---------- 7. createReminder ----------
-export function createReminder(policyYearStart: string): { remindOn: string; resetsOn: string; ics: string } {
+export function createReminder(policyYearStart: string, limit = 30000): { remindOn: string; resetsOn: string; ics: string } {
   const start = new Date(`${policyYearStart}T00:00:00Z`);
   if (Number.isNaN(start.getTime())) throw new Error("Invalid policy year start");
   const reset = new Date(start);
@@ -222,7 +232,7 @@ export function createReminder(policyYearStart: string): { remindOn: string; res
     `DTSTAMP:${compact(start)}T000000Z`,
     `DTSTART;VALUE=DATE:${compact(remind)}`,
     `DTEND;VALUE=DATE:${compact(next)}`,
-    "SUMMARY:Use your free ₹30\\,000 health check-up",
+    `SUMMARY:Use your free ${inr(limit).replace(/,/g, "\\,")} health check-up`,
     `DESCRIPTION:Your check-up benefit resets on ${ymd(reset)}. Book your check-up\\, keep the bill + report\\, and claim within 30 days.`,
     "END:VEVENT",
     "END:VCALENDAR",

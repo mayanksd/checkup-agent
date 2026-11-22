@@ -30,8 +30,8 @@ export interface ShortlistRow {
 }
 
 export interface AgentResult {
-  persona: { name: string; age: number };
-  policy: Pick<PolicySummary, "limit" | "route" | "claimWithinDays" | "policyYearStart" | "geneticTests" | "ignoredLines">;
+  persona: { name: string; age: number | null };
+  policy: Pick<PolicySummary, "sumInsured" | "limit" | "route" | "claimWithinDays" | "policyYearStart" | "geneticTests" | "ignoredLines">;
   focus: Focus[];
   mode: ModeChoice;
   shortlist: ShortlistRow[];

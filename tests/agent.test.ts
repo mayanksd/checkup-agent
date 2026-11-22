@@ -8,7 +8,10 @@ import { runOffline } from "../lib/agent.ts";
 
 delete process.env.ANTHROPIC_API_KEY; // tests never hit the network
 
-const FOCI: Focus[][] = [["general"], ["heart"], ["metabolism"], ["hormones", "gut"], ["longevity", "heart"], ["genetic"], ["gut"]];
+const FOCI: Focus[][] = [
+  ["general"], ["heart"], ["metabolism"], ["hormones", "gut"], ["longevity", "heart"], ["genetic"], ["gut"],
+  ["fullbody"], ["stamina"], ["thyroid", "vitamins"], ["bone"], ["longevity", "genetic"],
+];
 const MODES: ModeChoice[] = ["home", "lab", "either"];
 
 test("plan never exceeds the limit, for every focus/mode and any prices", () => {
@@ -111,4 +114,35 @@ test("input guards: validation, notes and default focus", () => {
     assert.equal(ok.stripped, 1);
   }
   assert.deepEqual(createReminder("2026-01-01").remindOn, "2026-12-02");
+});
+
+test("limit is 1% of the sum insured, everywhere", async () => {
+  assert.equal(getPolicy("arjun").limit, 30000);
+  assert.equal(getPolicy("priya", { sumInsured: 10_00_000 }).limit, 10000);
+  const r = await runOffline(RequestSchema.parse({ persona: "priya", sumInsured: 10_00_000, focus: ["heart"], mode: "either", simulateFailure: true }));
+  assert.equal(r.plan.limit, 10000);
+  assert.ok(r.plan.total <= 10000);
+  assert.match(r.plan.usedText, /of ₹10,000 used$/);
+  assert.match(r.reminder.ics, /SUMMARY:Use your free ₹10\\,000 health check-up/);
+  assert.equal(RequestSchema.safeParse({ persona: "arjun", sumInsured: 5000 }).success, false);
+  assert.equal(RequestSchema.safeParse({ persona: "arjun", sumInsured: 30_00_000.5 }).success, false);
+});
+
+test("own profile: validated, defaults when empty", () => {
+  const ok = RequestSchema.parse({ persona: "custom", profile: { name: "Meera", age: 45, gender: "Female" } });
+  assert.equal(getPolicy("custom", { profile: ok.profile }).name, "Meera");
+  assert.equal(getPolicy("custom", { profile: { name: "" } }).name, "You");
+  for (const age of [17, 91, 30.5]) assert.equal(RequestSchema.safeParse({ persona: "custom", profile: { age } }).success, false);
+  assert.equal(RequestSchema.safeParse({ persona: "custom", profile: { name: "<script>" } }).success, false);
+  assert.equal(RequestSchema.parse({}).persona, "arjun");
+  assert.equal(getPolicy("custom").ignoredLines, 0);
+});
+
+test("new focus chips map to the right providers", () => {
+  const plan = (focus: Focus[], mode: ModeChoice = "either") =>
+    buildPlan({ candidates: searchProviders(focus, mode).map(listedCandidate), limit: 30000, focus, mode }).picks.map((p) => p.provider);
+  assert.ok(plan(["stamina"]).some((p) => p.name === "Ultrahuman"));
+  assert.ok(plan(["bone"]).every((p) => p.tests.includes("dexa")));
+  assert.ok(plan(["fullbody"], "lab").some((p) => p.name === "Cent Health" || p.name === "Nura"));
+  assert.ok(plan(["gut"]).some((p) => p.id === "deep-holistics"));
 });

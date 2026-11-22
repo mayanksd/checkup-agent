@@ -3,7 +3,8 @@
 export type Mode = "lab visit" | "home collection";
 export type Category = "hero" | "advanced" | "standard" | "genetic";
 export type Tag =
-  | "heart" | "metabolism" | "hormones" | "longevity" | "gut" | "genetic"
+  | "longevity" | "fullbody" | "genetic" | "gut" | "stamina"
+  | "heart" | "metabolism" | "hormones" | "thyroid" | "bone" | "vitamins"
   | "cancer" | "fitness" | "general";
 
 export interface Provider {
@@ -46,7 +47,7 @@ export const providers: Provider[] = [
     bookingUrl: "https://www.cent.health/product",
     contactUrl: "https://www.cent.health/",
     category: "hero",
-    tags: ["heart", "longevity", "cancer"],
+    tags: ["heart", "longevity", "fullbody", "bone", "cancer"],
     cityConfirmed: true,
     needsPrescription: false,
     googleRating: rated(4.5, 546),
@@ -80,7 +81,7 @@ export const providers: Provider[] = [
     bookingUrl: "https://bengaluru.nura.in/",
     contactUrl: "https://bengaluru.nura.in/",
     category: "hero",
-    tags: ["cancer", "metabolism", "heart"],
+    tags: ["fullbody", "heart", "metabolism", "bone", "cancer"],
     cityConfirmed: true,
     needsPrescription: false,
     googleRating: rated(4.7, 929),
@@ -97,7 +98,7 @@ export const providers: Provider[] = [
     bookingUrl: "https://www.ultrahuman.com/in/performance-lab/buy/",
     contactUrl: "https://www.ultrahuman.com/in/performance-lab/",
     category: "hero",
-    tags: ["longevity", "fitness"],
+    tags: ["longevity", "stamina", "bone", "fitness"],
     cityConfirmed: true,
     needsPrescription: false,
     googleRating: rated(4.6, 123),
@@ -114,7 +115,7 @@ export const providers: Provider[] = [
     bookingUrl: "https://www.ultrahuman.com/in/performance-lab/buy/",
     contactUrl: "https://www.ultrahuman.com/in/performance-lab/",
     category: "advanced",
-    tags: ["longevity"],
+    tags: ["longevity", "stamina"],
     cityConfirmed: true,
     needsPrescription: false,
     googleRating: rated(4.6, 123),
@@ -131,7 +132,7 @@ export const providers: Provider[] = [
     bookingUrl: "https://deepholistics.com/dh-baseline-landing",
     contactUrl: "https://deepholistics.com/",
     category: "advanced",
-    tags: ["metabolism", "hormones", "gut"],
+    tags: ["gut", "hormones", "metabolism", "thyroid", "vitamins"],
     cityConfirmed: true,
     needsPrescription: false,
     homeService: true,
@@ -148,7 +149,7 @@ export const providers: Provider[] = [
     bookingUrl: "https://www.1mg.com/labs/test/comprehensive-gold-full-body-checkup-with-smart-report-2763",
     contactUrl: "https://www.1mg.com/labs",
     category: "standard",
-    tags: ["general"],
+    tags: ["general", "thyroid", "vitamins", "metabolism"],
     cityConfirmed: true,
     needsPrescription: false,
     googleRating: rated(4.5, 1300),
@@ -165,7 +166,7 @@ export const providers: Provider[] = [
     bookingUrl: "https://www.supprx.app/pricing",
     contactUrl: "https://www.supprx.app/",
     category: "advanced",
-    tags: ["metabolism"],
+    tags: ["metabolism", "vitamins"],
     cityConfirmed: false,
     needsPrescription: false,
   },

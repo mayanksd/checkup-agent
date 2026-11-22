@@ -14,7 +14,10 @@ import type { AgentEvent, AgentResult, ShortlistRow } from "./types.ts";
 type Emit = (e: AgentEvent) => void;
 
 interface Session {
-  req: { persona: AgentRequest["persona"]; focus: Focus[]; mode: ModeChoice; note: string; simulateFailure: boolean };
+  req: {
+    persona: AgentRequest["persona"]; profile?: AgentRequest["profile"]; sumInsured: number;
+    focus: Focus[]; mode: ModeChoice; note: string; simulateFailure: boolean;
+  };
   emit: Emit;
   policy?: PolicySummary;
   shortlist?: Provider[];
@@ -48,8 +51,8 @@ async function timed<T>(s: Session, name: string, fn: () => Promise<T> | T, summ
 // ---- tool implementations (shared by the agent and the offline pipeline) ----
 
 async function doGetPolicy(s: Session) {
-  const p = await timed(s, "getPolicy", () => getPolicy(s.req.persona), (r) => ({
-    text: `${r.name}, ${r.age} · limit ${inr(r.limit)} · ${r.route}`,
+  const p = await timed(s, "getPolicy", () => getPolicy(s.req.persona, { sumInsured: s.req.sumInsured, profile: s.req.profile }), (r) => ({
+    text: `${r.name}${r.age != null ? `, ${r.age}` : ""} · limit ${inr(r.limit)} (1% of ${inr(r.sumInsured)}) · ${r.route}`,
   }));
   if (!s.policy && p.ignoredLines > 0) {
     s.emit({ type: "note", icon: "🛡️", text: `Ignored ${p.ignoredLines} suspicious instruction${p.ignoredLines > 1 ? "s" : ""} in the policy` });
@@ -121,7 +124,7 @@ async function doPlan(s: Session, candidateIds: string[], requestedLimit?: numbe
 
 async function doReminder(s: Session, start?: string) {
   const policy = s.policy ?? (await doGetPolicy(s));
-  const r = await timed(s, "createReminder", () => createReminder(start === policy.policyYearStart ? start : policy.policyYearStart), (r) => ({
+  const r = await timed(s, "createReminder", () => createReminder(start === policy.policyYearStart ? start : policy.policyYearStart, policy.limit), (r) => ({
     text: `Reminder on ${r.remindOn} (benefit resets ${r.resetsOn})`,
   }));
   s.reminder = r;
@@ -171,6 +174,7 @@ function buildResult(s: Session, driver: AgentResult["driver"]): AgentResult {
     policy: {
       limit: policy.limit, route: policy.route, claimWithinDays: policy.claimWithinDays,
       policyYearStart: policy.policyYearStart, geneticTests: policy.geneticTests, ignoredLines: policy.ignoredLines,
+      sumInsured: policy.sumInsured,
     },
     focus: s.req.focus, mode: s.req.mode, shortlist, plan: s.plan!,
     mapsUrls: Object.fromEntries(allPicks.map((p) => [p.provider.id, mapsLink(p.provider)])),
@@ -207,7 +211,7 @@ function newSession(req: AgentRequest, emit: Emit): Session {
     notes.push(msg);
   }
   return {
-    req: { persona: req.persona, focus: normal, mode: req.mode, note: cleanNote, simulateFailure: req.simulateFailure },
+    req: { persona: req.persona, profile: req.profile, sumInsured: req.sumInsured, focus: normal, mode: req.mode, note: cleanNote, simulateFailure: req.simulateFailure },
     emit, prices: new Map(), ratings: new Map(), notes, seq: 0,
   };
 }
@@ -237,7 +241,7 @@ export async function runAgent(req: AgentRequest, emit: Emit, opts: { model?: La
       inputSchema: z.object({ personaId: PersonaSchema }),
       execute: async () => {
         const p = await doGetPolicy(s);
-        return { limit: p.limit, route: p.route, claimWithinDays: p.claimWithinDays, policyYearStart: p.policyYearStart, geneticTests: p.geneticTests, rules: p.rules, ignoredSuspiciousLines: p.ignoredLines };
+        return { sumInsured: p.sumInsured, limit: p.limit, route: p.route, claimWithinDays: p.claimWithinDays, policyYearStart: p.policyYearStart, geneticTests: p.geneticTests, rules: p.rules, ignoredSuspiciousLines: p.ignoredLines };
       },
     }),
     searchProviders: tool({

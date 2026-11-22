@@ -1,21 +1,48 @@
 // Input validation and prompt-injection defences. Pure code, no model calls.
 import { z } from "zod";
 
-export const FOCUS_VALUES = ["heart", "metabolism", "hormones", "longevity", "gut", "genetic", "general"] as const;
+export const FOCUS_VALUES = [
+  "longevity", "fullbody", "genetic", "gut", "stamina",
+  "heart", "metabolism", "hormones", "thyroid", "bone", "vitamins", "general",
+] as const;
 export const MODE_VALUES = ["home", "lab", "either"] as const;
-export const PERSONA_VALUES = ["arjun", "priya"] as const;
+export const PERSONA_VALUES = ["arjun", "priya", "custom"] as const;
 
 export const FocusSchema = z.enum(FOCUS_VALUES, { error: "Pick from the listed focus areas" });
 export const ModeSchema = z.enum(MODE_VALUES, { error: "Choose home, lab or either" });
-export const PersonaSchema = z.enum(PERSONA_VALUES, { error: "Pick Arjun or Priya" });
+export const PersonaSchema = z.enum(PERSONA_VALUES, { error: "Pick Arjun, Priya or enter your own" });
 
 export type Focus = z.infer<typeof FocusSchema>;
 export type ModeChoice = z.infer<typeof ModeSchema>;
 
 export const NOTE_MAX = 300;
 
+/** Check-up benefit = 1% of the annual sum insured. */
+export const CHECKUP_PERCENT = 0.01;
+export const DEFAULT_SUM_INSURED = 30_00_000;
+export const SUM_INSURED_MIN = 1_00_000;
+export const SUM_INSURED_MAX = 10_00_00_000;
+export const checkupLimitFor = (sumInsured: number) => Math.round(sumInsured * CHECKUP_PERCENT);
+
+export const SumInsuredSchema = z
+  .number({ error: "Enter the sum insured in rupees" })
+  .int("Use whole rupees")
+  .min(SUM_INSURED_MIN, "Sum insured must be at least ₹1,00,000")
+  .max(SUM_INSURED_MAX, "Sum insured must be at most ₹10,00,00,000");
+
+export const ProfileSchema = z.object({
+  name: z.string().trim().max(40, "Keep the name under 40 characters")
+    .regex(/^[\p{L} .'-]*$/u, "Use letters only in the name").optional().default(""),
+  age: z.number({ error: "Age must be a number" }).int("Age must be a whole number")
+    .min(18, "Age must be between 18 and 90").max(90, "Age must be between 18 and 90").optional(),
+  gender: z.enum(["Male", "Female", "Other"], { error: "Pick a gender option" }).optional(),
+});
+export type Profile = z.infer<typeof ProfileSchema>;
+
 export const RequestSchema = z.object({
-  persona: PersonaSchema,
+  persona: PersonaSchema.default("arjun"),
+  profile: ProfileSchema.optional(),
+  sumInsured: SumInsuredSchema.default(DEFAULT_SUM_INSURED),
   focus: z.array(FocusSchema).max(2, "Pick up to 2 things").default([]),
   mode: ModeSchema.default("either"),
   note: z.string().max(NOTE_MAX, `Keep it under ${NOTE_MAX} characters`).optional().default(""),
@@ -48,14 +75,19 @@ export function sanitizePolicyText(text: string): { rules: string[]; ignored: nu
 }
 
 const HEALTH_WORDS =
-  /\b(health|test|tests|check|checkup|check-up|heart|cardiac|bp|pressure|cholesterol|sugar|diabet\w*|thyroid|hormon\w*|pcos|blood|vitamin\w*|weight|sleep|stress|energy|tired|fatigue|gut|digest\w*|bloat\w*|stomach|cancer|genetic\w*|dna|family|history|doctor|fit|fitness|gym|run\w*|age|ageing|aging|longevity|home|lab|weekend|morning|evening|near|koramangala|indiranagar|domlur|fast|fasting|scan|mri|ct|dexa|bone|lung|eye|hearing|liver|kidney|budget|price|cheap|quick|metabol\w*|insulin|anxious|nervous|needle|prefer|want|worried|concern\w*)\b/i;
+  /\b(stamina|vo2|microbiome|bone|bones|osteo\w*|vitamin|vitamins|mri|full-body|longevity|test|tests|check|checkup|check-up|heart|cardiac|bp|pressure|cholesterol|sugar|diabet\w*|thyroid|hormon\w*|pcos|blood|vitamin\w*|weight|sleep|stress|energy|tired|fatigue|gut|digest\w*|bloat\w*|stomach|cancer|genetic\w*|dna|family|history|doctor|fit|fitness|gym|run\w*|age|ageing|aging|longevity|home|lab|weekend|morning|evening|near|koramangala|indiranagar|domlur|fast|fasting|scan|mri|ct|dexa|bone|lung|eye|hearing|liver|kidney|budget|price|cheap|quick|metabol\w*|insulin|anxious|nervous|needle|prefer|want|worried|concern\w*)\b/i;
 
 const FOCUS_HINTS: [RegExp, Focus][] = [
+  [/\b(thyroid)\b/i, "thyroid"],
+  [/\b(bone|bones|osteo\w*|dexa)\b/i, "bone"],
+  [/\b(vitamin\w*|b12|iron)\b/i, "vitamins"],
+  [/\b(stamina|vo2|endurance)\b/i, "stamina"],
+  [/\b(mri|full-body scan|body scan|scan)\b/i, "fullbody"],
   [/\b(heart|cardiac|bp|pressure|cholesterol)\b/i, "heart"],
   [/\b(sugar|diabet\w*|insulin|metabol\w*|weight)\b/i, "metabolism"],
-  [/\b(thyroid|hormon\w*|pcos|testosterone)\b/i, "hormones"],
-  [/\b(gut|digest\w*|bloat\w*|stomach)\b/i, "gut"],
-  [/\b(longevity|ageing|aging|fitness|vo2)\b/i, "longevity"],
+  [/\b(hormon\w*|pcos|testosterone)\b/i, "hormones"],
+  [/\b(gut|microbiome|digest\w*|bloat\w*|stomach)\b/i, "gut"],
+  [/\b(longevity|ageing|aging)\b/i, "longevity"],
   [/\b(genetic\w*|dna)\b/i, "genetic"],
 ];
 

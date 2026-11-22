@@ -54,6 +54,12 @@ function readMemory(): Memory | null {
     return null;
   }
 }
+function clearMemory() {
+  try {
+    localStorage.removeItem(MEMORY_KEY);
+    localStorage.removeItem("checkup-agent:v1"); // older format
+  } catch { /* storage unavailable */ }
+}
 function writeMemory(m: Memory) {
   try { localStorage.setItem(MEMORY_KEY, JSON.stringify(m)); } catch { /* storage unavailable */ }
 }
@@ -103,6 +109,19 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [memory, setMemory] = useState<Memory | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  function startOver() {
+    abortRef.current?.abort();
+    clearMemory();
+    setMemory(null);
+    setPersona(null); setName(""); setAge(""); setGender("");
+    setSumInsured(DEFAULT_SUM_INSURED); setSumDraft(String(DEFAULT_SUM_INSURED)); setEditingSum(false);
+    setFocus([]); setMode("either"); setNote(""); setSimulateFailure(false);
+    setFriendly([]); setTech([]); setShowTech(false);
+    setResult(null); setError(null); setRunning(false);
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
 
   useEffect(() => setMemory(readMemory()), []);
 
@@ -135,8 +154,11 @@ export default function Home() {
       focus: override?.focus ?? focus, mode: override?.mode ?? mode, note: override ? "" : note, simulateFailure,
     };
     setRunning(true); setFriendly([]); setTech([]); setResult(null); setError(null);
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     try {
-      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error ?? "Couldn't reach the planner. Please try again.");
@@ -151,6 +173,7 @@ export default function Home() {
         const lines = buf.split("\n");
         buf = lines.pop() ?? "";
         for (const line of lines) {
+          if (ctrl.signal.aborted) return;
           if (!line.trim()) continue;
           const e = JSON.parse(line) as AgentEvent;
           if (e.type === "step") setTech((l) => { const i = l.findIndex((x) => x.id === e.id); return i < 0 ? [...l, e] : l.map((x, j) => (j === i ? e : x)); });
@@ -170,9 +193,9 @@ export default function Home() {
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
-      setRunning(false);
+      if (abortRef.current === ctrl) setRunning(false);
     }
   }
 
@@ -193,7 +216,8 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6">
-      <header className="text-center">
+      <header className="relative pt-8 text-center sm:pt-0">
+        <StartOverButton onClick={startOver} className="absolute right-0 top-0" />
         <p className="text-sm font-semibold tracking-wide text-emerald-700">🧬 CHECKUP AGENT</p>
         <h1 className="mt-1 text-3xl font-bold sm:text-4xl">Max your free health check-up.</h1>
         <p className="mt-1 text-slate-600">It&apos;s one life — build it for longevity.</p>
@@ -338,6 +362,7 @@ export default function Home() {
       )}
 
       {result && <Result result={result} refEl={resultRef} onIcs={downloadIcs} />}
+      {result && <div className="flex justify-center"><StartOverButton onClick={startOver} /></div>}
 
       <footer className="pt-4 text-center text-xs text-slate-500">
         Mock policies, public listed prices. Not medical advice — ask your doctor which tests suit you.
@@ -399,6 +424,14 @@ function Confetti() {
         <span key={i} className="confetti" style={{ left: `${c.left}%`, background: c.color, animationDelay: `${c.delay}s`, transform: `rotate(${c.rotate}deg)` }} />
       ))}
     </div>
+  );
+}
+
+function StartOverButton({ onClick, className = "" }: { onClick: () => void; className?: string }) {
+  return (
+    <button type="button" onClick={onClick} className={`rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:border-emerald-500 ${className}`}>
+      🔄 Start over
+    </button>
   );
 }
 
